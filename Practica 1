@@ -1,0 +1,134 @@
+Participantes 
+Darwin Ruiz 
+Diego Aza
+ video            https://www.youtube.com/watch?v=koXtT71-Pgk
+  archivo .txt      [University.txt](https://github.com/user-attachments/files/19080889/University.txt)
+
+codigo
+import Data.Time.Clock
+import Data.List
+import System.IO
+import Control.Exception
+import Control.DeepSeq (deepseq)
+
+
+data Estudiante = Estudiante {
+    idEstudiante :: String,
+    ingreso :: UTCTime,
+    salida :: Maybe UTCTime 
+} deriving (Show, Read)
+
+
+registrarIngreso :: String -> UTCTime -> [Estudiante] -> [Estudiante]
+registrarIngreso idEst tiempo estudiantes =
+    Estudiante idEst tiempo Nothing : estudiantes
+
+
+registrarSalida :: String -> UTCTime -> [Estudiante] -> [Estudiante]
+registrarSalida idEst tiempo estudiantes =
+    map (\e -> if idEst == idEstudiante e then e { salida = Just tiempo } else e) estudiantes
+
+
+buscarEstudiante :: String -> [Estudiante] -> Maybe Estudiante
+buscarEstudiante idEst estudiantes =
+    find (\e -> idEst == idEstudiante e && isNothing (salida e)) estudiantes
+    where
+        isNothing Nothing = True
+        isNothing _       = False
+
+
+tiempoEnUniversidad :: Estudiante -> IO NominalDiffTime
+tiempoEnUniversidad estudiante = do
+    tiempoActual <- getCurrentTime
+    return $ diffUTCTime tiempoActual (ingreso estudiante)
+
+
+guardarEstudiantes :: [Estudiante] -> IO ()
+guardarEstudiantes estudiantes = do
+    withFile "University.txt" WriteMode $ \h -> do
+        hPutStr h (unlines (map mostrarEstudiante estudiantes))
+    putStrLn "Información de estudiantes guardada en el archivo University.txt."
+
+
+cargarEstudiantes :: IO [Estudiante]
+cargarEstudiantes = do
+    contenido <- withFile "University.txt" ReadMode $ \h -> do
+        cont <- hGetContents h
+        evaluate (cont `deepseq` cont)
+    let lineas = lines contenido
+    return (map leerEstudiante lineas)
+    where
+        leerEstudiante linea = read linea :: Estudiante
+
+
+mostrarEstudiante :: Estudiante -> String
+mostrarEstudiante (Estudiante idEst ingreso salida) =
+    "Estudiante {idEstudiante = \"" ++ idEst ++ "\", ingreso = " ++ show ingreso ++ ", salida = " ++ maybe "Nothing" show salida ++ "}"
+
+
+listarEstudiantes :: [Estudiante] -> IO ()
+listarEstudiantes [] = putStrLn "No hay estudiantes registrados en la universidad."
+listarEstudiantes estudiantes = do
+    putStrLn "Estudiantes en la universidad:"
+    mapM_ (putStrLn . mostrarEstudiante) estudiantes
+
+
+main :: IO ()
+main = do
+  
+    estudiantes <- cargarEstudiantes
+    putStrLn "¡Bienvenido al Sistema de Gestión de Registro de Estudiantes!"
+
+  
+    cicloPrincipal estudiantes
+
+
+cicloPrincipal :: [Estudiante] -> IO ()
+cicloPrincipal estudiantes = do
+    putStrLn "\nSeleccione una opción:"
+    putStrLn "1. Registrar in      greso de estudiante"
+    putStrLn "2. Registrar salida de estudiante"
+    putStrLn "3. Buscar estudiante por ID"
+    putStrLn "4. Listar estudiantes"
+    putStrLn "5. Salir"
+
+    opcion <- getLine
+    case opcion of
+        "1" -> do
+            putStrLn "Ingrese el ID del estudiante:"
+            idEst <- getLine
+            tiempoActual <- getCurrentTime
+            let estudiantesActualizados = registrarIngreso idEst tiempoActual estudiantes
+            putStrLn $ "Estudiante con ID " ++ idEst ++ " ingresado a la universidad."
+            guardarEstudiantes estudiantesActualizados
+            cicloPrincipal estudiantesActualizados
+
+        "2" -> do
+            putStrLn "Ingrese el ID del estudiante para registrar su salida:"
+            idEst <- getLine
+            tiempoActual <- getCurrentTime
+            let estudiantesActualizados = registrarSalida idEst tiempoActual estudiantes
+            putStrLn $ "Estudiante con ID " ++ idEst ++ " ha salido de la universidad."
+            guardarEstudiantes estudiantesActualizados
+            cicloPrincipal estudiantesActualizados
+
+        "3" -> do
+            putStrLn "Ingrese el ID del estudiante a buscar:"
+            idEst <- getLine
+            case buscarEstudiante idEst estudiantes of
+                Just estudiante -> do
+                    tiempoTotal <- tiempoEnUniversidad estudiante
+                    putStrLn $ "El estudiante con ID " ++ idEst ++ " se encuentra en la universidad."
+                    putStrLn $ "Tiempo en la universidad: " ++ show tiempoTotal ++ " segundos."
+                Nothing -> putStrLn "Estudiante no encontrado en la universidad."
+            cicloPrincipal estudiantes
+
+        "4" -> do
+            listarEstudiantes estudiantes
+            cicloPrincipal estudiantes
+
+        "5" -> putStrLn "¡Hasta luego!"
+
+        _ -> do
+            putStrLn "Opción no válida. Por favor, seleccione una opción válida."
+            cicloPrincipal estudiantes
